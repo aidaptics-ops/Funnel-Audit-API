@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pick a time | Northwind Coaching</title>
+    <meta name="description" content="Choose a slot for your audit call." />
+  </head>
+  <body>
+    <h1>Select a Date &amp; Time</h1>
+    <p>Time zone: Eastern Time (US &amp; Canada)</p>
+    <button id="slot" type="button">10:30am</button>
+
+    <script>
+      // Stands in for the human picking a slot and confirming the booking.
+      const delay = Number(new URLSearchParams(location.search).get("autobook") || 0);
+      const book = () => {
+        location.href = "thanks.html";
+      };
+      document.getElementById("slot").addEventListener("click", book);
+      if (delay > 0) setTimeout(book, delay);
+    </script>
+  </body>
+</html>

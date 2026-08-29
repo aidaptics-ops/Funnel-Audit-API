@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Select a time</title>
+    <style>
+      #confirmed { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="picker">
+      <h1>Select a Date &amp; Time</h1>
+      <p>Time zone: Eastern Time (US &amp; Canada)</p>
+      <button id="slot" type="button">10:30am</button>
+    </div>
+
+    <div id="confirmed">
+      <h1>You are scheduled</h1>
+      <p>A calendar invitation has been sent. Friday, March 6, 2026 at 10:30 am EST with Dana Reeves.</p>
+    </div>
+
+    <script>
+      document.getElementById("slot").addEventListener("click", () => {
+        document.getElementById("picker").style.display = "none";
+        document.getElementById("confirmed").style.display = "block";
+        // Calendly announces a completed booking to every ancestor window.
+        const message = { event: "calendly.event_scheduled", payload: { event: { uri: "fixture/invitee/1" } } };
+        window.parent.postMessage(message, "*");
+        if (window.top && window.top !== window.parent) window.top.postMessage(message, "*");
+      });
+    </script>
+  </body>
+</html>

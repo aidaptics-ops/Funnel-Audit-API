@@ -1,0 +1,40 @@
+# Reinstalled inside the image for the image's own platform.
+node_modules
+dist
+
+# Runtime output and operator artefacts, never build inputs.
+results
+reports
+*.log
+
+# Not compiled (tsconfig excludes them) and not shipped.
+legacy
+tests
+scripts
+
+# Secrets and local config must never reach a layer.
+.env
+.env.*
+config.json
+
+# Repo metadata and editor/OS noise.
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docs and container files: changing them should not bust the dependency layer.
+README.md
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Playwright's own report/output directories if a local run left them behind.
+playwright-report
+test-results

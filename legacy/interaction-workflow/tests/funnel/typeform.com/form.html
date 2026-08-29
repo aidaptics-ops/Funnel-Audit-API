@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Application</title>
+    <style>
+      .step { display: none; }
+      .step.active { display: block; }
+      footer { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <!-- A multi-step form with the scheduler in the middle, the shape Typeform
+         produces when a Calendly block sits between questions. -->
+    <div class="step active" id="step-1">
+      <h1>What is your name?</h1>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" />
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" />
+      <button id="ok-1" type="button">OK</button>
+      <!-- Progress chrome that used to be mistaken for a completed form. -->
+      <button id="show-next-step" type="button">Next step</button>
+      <p id="progress">Question 1 of 3 — almost done</p>
+    </div>
+
+    <div class="step" id="step-2">
+      <h1>Book a Strategy Session</h1>
+      <iframe id="calendar" title="Scheduler" width="600" height="400" src="../calendly.com/booking.html"></iframe>
+    </div>
+
+    <div class="step" id="step-3">
+      <h1>Anything else we should know?</h1>
+      <textarea id="notes"></textarea>
+      <button id="submit" type="button">Submit</button>
+    </div>
+
+    <!-- Typeform marks its final screen; the questions are gone by then. -->
+    <div class="step" id="done" data-qa="thank-you-screen">
+      <h1>Thank you</h1>
+      <p>Your application was received. We will see you on the call.</p>
+    </div>
+
+    <footer>Powered by Typeform</footer>
+
+    <script>
+      const show = (id) => {
+        document.querySelectorAll(".step").forEach((el) => el.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      };
+      document.getElementById("ok-1").addEventListener("click", () => show("step-2"));
+      document.getElementById("submit").addEventListener("click", () => {
+        show("done");
+        // Typeform reports a completed submission to the embedding page.
+        window.parent.postMessage({ type: "form-submit", formId: "fixture", responseId: "r1" }, "*");
+      });
+      // The booking frame reports back, exactly like a Calendly embed does.
+      window.addEventListener("message", (event) => {
+        if (event.data && event.data.event === "calendly.event_scheduled") show("step-3");
+      });
+    </script>
+  </body>
+</html>

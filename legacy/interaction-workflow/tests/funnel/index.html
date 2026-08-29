@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Free Profit Audit | Northwind Coaching</title>
+    <meta name="description" content="Book a free 30 minute profit audit call." />
+    <script>
+      // Stand-in for a Meta Pixel install.
+      window.fbq = function () {};
+    </script>
+    <script type="application/ld+json">
+      { "@type": "Organization", "name": "Northwind Coaching" }
+    </script>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; }
+      header nav a { margin-right: 12px; }
+      .hero { min-height: 520px; padding: 24px; }
+      .spacer { height: 900px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <a href="/blog">Blog</a>
+      </nav>
+    </header>
+
+    <div class="hero">
+      <h1>Get your free profit audit</h1>
+      <p>We map the leaks in your funnel and hand you the fixes on a 30 minute call.</p>
+
+      <iframe
+        title="Sales video"
+        width="480"
+        height="270"
+        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+      ></iframe>
+
+      <form id="lead-form" method="get" action="scheduling.html">
+        <label for="name">Full name</label>
+        <input id="name" name="name" type="text" required />
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required />
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" />
+        <input type="hidden" id="autobook" name="autobook" value="" />
+        <button type="submit">Book my free audit</button>
+      </form>
+    </div>
+
+    <div class="spacer"></div>
+    <h2>What clients say</h2>
+    <blockquote>"We found $40k of leaks in one call." — Dana R.</blockquote>
+
+    <script>
+      // Stands in for the human operator: fills and submits the form.
+      // The crawler must not touch the form itself.
+      const params = new URLSearchParams(location.search);
+      const delay = Number(params.get("autofill") || 0);
+      document.getElementById("autobook").value = params.get("autobook") || "";
+      if (delay > 0) {
+        setTimeout(() => {
+          document.getElementById("name").value = "Ada Tester";
+          document.getElementById("email").value = "ada@example.com";
+          document.getElementById("lead-form").submit();
+        }, delay);
+      }
+    </script>
+  </body>
+</html>

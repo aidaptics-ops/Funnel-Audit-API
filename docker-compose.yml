@@ -1,0 +1,26 @@
+services:
+  analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: funnel-analyzer:local
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      MAX_CONCURRENT_ANALYSES: "2"
+      BROWSER_TIMEOUT_MS: "30000"
+      NAVIGATION_TIMEOUT_MS: "30000"
+      ANALYSIS_TIMEOUT_MS: "120000"
+      # The mobile pass costs a second page load; set false to halve analysis time.
+      CHECK_MOBILE_VIEWPORT: "true"
+      CHECK_LINKS: "true"
+      MAX_LINK_CHECKS: "25"
+      # Keep false even locally: true turns /analyze into an SSRF tool against
+      # anything reachable from this container, including other compose services.
+      ALLOW_PRIVATE_HOSTS: "false"
+      # BROWSER_CHANNEL is intentionally unset - the image ships bundled Chromium.
+    # Chromium maps large shared-memory buffers and crashes on the 64MB default.
+    shm_size: "1gb"
+    restart: unless-stopped

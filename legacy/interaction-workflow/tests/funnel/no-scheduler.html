@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Free checklist | Northwind Coaching</title>
+    <meta name="description" content="Download the funnel leak checklist." />
+    <script>
+      window.gtag = function () {};
+    </script>
+  </head>
+  <body>
+    <h1>Download the funnel leak checklist</h1>
+    <p>Twelve leaks to check before you spend another dollar on traffic.</p>
+
+    <form id="optin" method="get" action="thanks-simple.html">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required />
+      <button type="submit">Send me the checklist</button>
+    </form>
+
+    <blockquote>"Found three leaks in ten minutes." — Sam O.</blockquote>
+
+    <script>
+      const delay = Number(new URLSearchParams(location.search).get("autofill") || 0);
+      if (delay > 0) {
+        setTimeout(() => {
+          document.getElementById("email").value = "ada@example.com";
+          document.getElementById("optin").submit();
+        }, delay);
+      }
+    </script>
+  </body>
+</html>

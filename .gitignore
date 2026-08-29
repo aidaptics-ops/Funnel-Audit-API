@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+results/
+screenshots/*
+!screenshots/.gitkeep
+reports/*
+!reports/.gitkeep
+*.log
+.DS_Store
+Thumbs.db
+playwright-report/
+test-results/
