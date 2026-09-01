@@ -38,6 +38,9 @@ const REQUIRED_KEYS = [
   "technical",
   "summary",
   "observed_issues",
+  // Always present, null unless the request asked for it. A key that only
+  // sometimes exists is a worse contract than one that is explicitly empty.
+  "screenshot",
 ] as const;
 
 const workDir = mkdtempSync(join(tmpdir(), "analyzer-contract-"));

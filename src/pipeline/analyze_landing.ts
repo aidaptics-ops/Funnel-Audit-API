@@ -43,6 +43,8 @@ export interface AnalyzeLandingOptions {
   isAllowedUrl?: (url: string) => boolean;
   /** Hard ceiling for the capture. Defaults to 3x the navigation timeout. */
   deadlineMs?: number;
+  /** Photograph the page as well as reading it. Off unless asked for. */
+  screenshot?: boolean;
 }
 
 /** Loads one landing page and turns it into the structured analysis. */
@@ -54,6 +56,7 @@ export async function analyzeLandingPage(options: AnalyzeLandingOptions): Promis
     browser: options.browser,
     config: options.config,
     checkMobileViewport: options.checkMobileViewport,
+    screenshot: options.screenshot === true,
     linkCheck: options.linkCheck,
     isAllowedUrl: options.isAllowedUrl ?? options.linkCheck.isAllowedUrl,
     ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
@@ -88,6 +91,7 @@ export function composeAnalysis(capture: CaptureResult, durationMs: number): Lan
 
   const withoutIssues: Omit<LandingAnalysis, "observed_issues"> = {
     schema_version: ANALYSIS_SCHEMA_VERSION,
+    screenshot: capture.screenshot,
     analyzed_at: new Date().toISOString(),
     duration_ms: durationMs,
     funnel: buildFunnel(capture),

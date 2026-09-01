@@ -23,7 +23,7 @@ export async function main(): Promise<void> {
   await startServer(
     config,
     {
-      analyze: async (url, jobId, budget) => {
+      analyze: async (url, jobId, budget, request) => {
         // An instance without a browser is unhealthy, not a bad request; the
         // tag is what turns this into a 503 the platform can act on.
         const browser = await browsers.get().catch((error: unknown) => {
@@ -33,12 +33,13 @@ export async function main(): Promise<void> {
         // Typed as an intersection so the capture pipeline receives the HTTP
         // layer's remaining budget and can cancel itself instead of running on
         // after the client has already been answered.
-        const request: AnalyzeLandingOptions & Partial<AnalysisBudget> = {
+        const analyzeOptions: AnalyzeLandingOptions & Partial<AnalysisBudget> = {
           url,
           jobId,
           browser,
           config: browserConfig,
           checkMobileViewport: config.checkMobileViewport,
+          screenshot: request.screenshot,
           budgetMs: budget.budgetMs,
           deadlineAt: budget.deadlineAt,
           signal: budget.signal,
@@ -52,7 +53,7 @@ export async function main(): Promise<void> {
           },
         };
 
-        return analyzeLandingPage(request);
+        return analyzeLandingPage(analyzeOptions);
       },
     },
     {

@@ -1,3 +1,4 @@
+import type { PageScreenshot } from "../pipeline/screenshot.js";
 import type {
   BenefitStackItem,
   FaqItem,
@@ -613,6 +614,15 @@ export interface AnalysisSummary {
 /* ------------------------------- analysis -------------------------------- */
 
 export interface LandingAnalysis {
+  /**
+   * What the page looks like, in strips, when the caller asked for it.
+   *
+   * The rest of this object describes the markup. This describes the page, and
+   * the two disagree more often than is comfortable — a scripted button with no
+   * href reads as "no conversion path" here and as an obvious opt-in to anyone
+   * looking at it.
+   */
+  screenshot?: PageScreenshot | null;
   schema_version: string;
   analyzed_at: string;
   duration_ms: number;

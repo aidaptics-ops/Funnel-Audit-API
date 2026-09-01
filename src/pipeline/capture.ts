@@ -12,6 +12,7 @@ import {
   isSameDocument,
 } from "./page_stability.js";
 import { checkLinks, type LinkCheckOptions } from "./link_checker.js";
+import { capturePageStrips, type PageScreenshot } from "./screenshot.js";
 
 export interface CaptureOptions {
   jobId: string;
@@ -29,6 +30,13 @@ export interface CaptureOptions {
   isAllowedUrl: (url: string) => boolean;
   /** Hard ceiling for the whole capture. Defaults to 3x the navigation timeout. */
   deadlineMs?: number;
+  /**
+   * Photograph the page as well as reading it.
+   *
+   * Off by default: the strips are the largest thing in the response, and only
+   * a caller that intends to show them to a vision model wants to carry them.
+   */
+  screenshot?: boolean;
 }
 
 export interface MobileObservation {
@@ -60,6 +68,8 @@ export interface CaptureResult {
   mobile: MobileObservation;
   link_checks: LinkCheckResult[];
   link_check_summary: { checked: number; skipped: number; note: string };
+  /** What the page looks like. Present only when asked for. */
+  screenshot: PageScreenshot | null;
 }
 
 /**
@@ -197,7 +207,15 @@ async function runCapture(
     mobile: { tested: false, viewport_width: null, horizontal_overflow: null, viewport_meta_present: false, note: null },
     link_checks: links.results,
     link_check_summary: links.summary,
+    screenshot: null,
   };
+
+  // Last, so a slow or failed screenshot cannot cost us the analysis. The page
+  // is still open and settled at this point, which is the state everything
+  // else was measured in.
+  if (options.screenshot) {
+    result.screenshot = await capturePageStrips(page, budget(deadlineAt, 20_000));
+  }
 
   if (options.checkMobileViewport) {
     result.mobile = await observeMobileViewport(options, contexts, deadlineAt);

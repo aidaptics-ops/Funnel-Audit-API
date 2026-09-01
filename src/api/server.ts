@@ -21,8 +21,24 @@ export interface AnalysisBudget {
   signal: AbortSignal;
 }
 
+/** Per-request switches a caller may set in the request body. */
+export interface AnalyzeRequestOptions {
+  /**
+   * Return strips of the rendered page alongside the structured reading.
+   *
+   * Opt-in because the images dominate the response size, and only a caller
+   * that will show them to a vision model has any use for them.
+   */
+  screenshot: boolean;
+}
+
 export interface ServerDeps {
-  analyze: (url: string, jobId: string, budget: AnalysisBudget) => Promise<LandingAnalysis>;
+  analyze: (
+    url: string,
+    jobId: string,
+    budget: AnalysisBudget,
+    request: AnalyzeRequestOptions,
+  ) => Promise<LandingAnalysis>;
 }
 
 /** Runs after the HTTP drain, before the process is allowed to exit. */
@@ -232,11 +248,12 @@ export function createServer(config: ApiConfig, deps: ServerDeps): http.Server {
 
     const budgetMs = config.totalAnalysisTimeoutMs;
     const controller = new AbortController();
-    const work = deps.analyze(target, jobId, {
-      budgetMs,
-      deadlineAt: Date.now() + budgetMs,
-      signal: controller.signal,
-    });
+    const work = deps.analyze(
+      target,
+      jobId,
+      { budgetMs, deadlineAt: Date.now() + budgetMs, signal: controller.signal },
+      { screenshot: isRecord(body.value) && body.value.screenshot === true },
+    );
 
     // Attached before the race so a rejection arriving after we have already
     // answered the client cannot surface as an unhandled rejection.

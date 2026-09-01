@@ -11,3 +11,7 @@ reports/*
 Thumbs.db
 playwright-report/
 test-results/
+
+# The outreach dashboard is its own repository, nested here for convenience.
+# Without this, a commit in the analyser swallows the whole of it.
+dashboard/

@@ -38,3 +38,6 @@ docker-compose.*.yml
 # Playwright's own report/output directories if a local run left them behind.
 playwright-report
 test-results
+
+# The outreach dashboard is a separate app with its own image.
+dashboard
