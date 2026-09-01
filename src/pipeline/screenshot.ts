@@ -29,8 +29,12 @@ const STRIP_HEIGHT = 1400;
  * Six strips is ~8400px of page — past the point where a cold reader has
  * stopped scrolling anyway. A longer page is covered from the top down, which
  * is the half that decides whether anyone converts.
+ *
+ * The default, not a constant: a caller reading a later page of a funnel wants
+ * enough of it to recognise the page, not a full audit, and says so by passing
+ * a smaller number.
  */
-const MAX_STRIPS = 6;
+export const DEFAULT_MAX_STRIPS = 6;
 
 /** JPEG at this quality is roughly a fifth the size of PNG and reads the same. */
 const JPEG_QUALITY = 72;
@@ -76,8 +80,15 @@ const EMPTY: PageScreenshot = {
  * enhancement, and losing it must not cost the caller an analysis that
  * otherwise succeeded.
  */
-export async function capturePageStrips(page: Page, deadlineMs: number): Promise<PageScreenshot> {
+export async function capturePageStrips(
+  page: Page,
+  deadlineMs: number,
+  maxStrips: number = DEFAULT_MAX_STRIPS,
+): Promise<PageScreenshot> {
   const startedAt = Date.now();
+  // A caller that asks for none still gets one: a screenshot section with no
+  // image at all is indistinguishable from a failed capture.
+  const stripLimit = Math.max(1, Math.floor(Number.isFinite(maxStrips) ? maxStrips : DEFAULT_MAX_STRIPS));
 
   try {
     const viewport = page.viewportSize();
@@ -100,7 +111,7 @@ export async function capturePageStrips(page: Page, deadlineMs: number): Promise
     await page.evaluate("window.scrollTo(0, 0)").catch(() => undefined);
 
     const wanted = Math.ceil(height / STRIP_HEIGHT);
-    const count = Math.min(wanted, MAX_STRIPS);
+    const count = Math.min(wanted, stripLimit);
     const strips: PageStrip[] = [];
 
     for (let index = 0; index < count; index += 1) {

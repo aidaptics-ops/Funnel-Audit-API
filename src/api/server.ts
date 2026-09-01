@@ -30,6 +30,23 @@ export interface AnalyzeRequestOptions {
    * that will show them to a vision model has any use for them.
    */
   screenshot: boolean;
+  /**
+   * How much of the audit to run. "full" is everything; "light" keeps the
+   * evidence and drops the mobile pass, the link check and most of the
+   * screenshot — what a caller wants for the second page of a funnel, where the
+   * question is what the page is rather than how well it converts.
+   *
+   * Page-agnostic by design: it changes the crawler's effort, never its
+   * conclusions. An unrecognised value is "full", never an error, so a typo in
+   * an optional switch cannot cost a caller their analysis.
+   */
+  captureProfile: "full" | "light";
+}
+
+/** Anything that is not exactly "light" is the full audit. */
+function readCaptureProfile(body: unknown): "full" | "light" {
+  if (!isRecord(body)) return "full";
+  return body.capture_profile === "light" ? "light" : "full";
 }
 
 export interface ServerDeps {
@@ -89,6 +106,10 @@ const HTTP_STATUS_BY_CODE: Record<string, number> = {
   private_host: 400,
   credentials_not_allowed: 400,
   url_too_long: 400,
+  // The URL guard rejects a host that will not resolve. Without this row it
+  // fell through to 500, which tells a caller the service broke when in fact
+  // the address they submitted does not exist.
+  dns_resolution_failed: 400,
   invalid_body: 400,
   blocked_navigation: 400,
   not_found: 404,
@@ -252,7 +273,10 @@ export function createServer(config: ApiConfig, deps: ServerDeps): http.Server {
       target,
       jobId,
       { budgetMs, deadlineAt: Date.now() + budgetMs, signal: controller.signal },
-      { screenshot: isRecord(body.value) && body.value.screenshot === true },
+      {
+        screenshot: isRecord(body.value) && body.value.screenshot === true,
+        captureProfile: readCaptureProfile(body.value),
+      },
     );
 
     // Attached before the race so a rejection arriving after we have already
@@ -632,21 +656,6 @@ function redactUrl(url: URL): string {
 function describe(error: unknown): string {
   if (error instanceof Error) return `${error.name}: ${error.message}`;
   return String(error);
-}
-
-/** Accepts one path segment only if it is a plain, traversal-free name. */
-function safeSegment(segment: string | undefined): string | null {
-  if (segment === undefined) return null;
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    return null;
-  }
-  if (decoded === "" || decoded.length > 128) return null;
-  if (!/^[A-Za-z0-9._-]+$/.test(decoded)) return null;
-  if (decoded === "." || decoded === ".." || decoded.includes("..")) return null;
-  return decoded;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

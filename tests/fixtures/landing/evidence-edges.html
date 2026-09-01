@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Evidence edges</title>
+  <!--
+    The script below is the trap: page.content() serialises a script body raw,
+    so the literal string it holds puts a "<body" in the markup while the real
+    element is still forty lines away. A capture that splits the document on the
+    first match reports the rest of this head as the page body.
+  -->
+  <script>var template = "<body class=trap>";</script>
+  <meta name="description" content="The description sits after the trap script">
+  <link rel="canonical" href="https://example.com/evidence-edges">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 60rem; padding: 2rem; }
+    .rating img { display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>Everything the collectors argue about</h1>
+  <p>
+    This page exists to pin down the edges of the evidence layer: sub-20px icons that
+    must not become accessibility findings, element ids that must not become vendor
+    globals, hidden inputs that belong to no form at all, and a select whose choices
+    run past the cap that keeps them.
+  </p>
+
+  <!--
+    Six decorative rating icons at 16x16 and one that fails to load, all with an
+    empty alt. The judged image list drops them; the raw evidence keeps them.
+  -->
+  <div class="rating">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/star.png" alt="" width="16" height="16">
+    <img src="/img/missing-logo.png" alt="" width="16" height="16">
+  </div>
+
+  <img src="/img/hero.png" alt="The product on a desk" width="600" height="400">
+
+  <!--
+    Named-element access: each of these puts its id on window, so a probe that
+    only asks `typeof window.Cal !== "undefined"` reports three vendors that
+    were never loaded. No script on this page loads any of them.
+  -->
+  <div id="Cal">Our calendar section</div>
+  <div id="Calendly">Widget mount point that never initialised</div>
+  <div id="Stripe">Payments are handled elsewhere</div>
+  <iframe name="Typeform" src="/about" width="320" height="200" title="An ordinary frame"></iframe>
+
+  <!--
+    Two hidden inputs outside every form. With two forms on the page there is no
+    form to attach them to, so the only way they reach the response is the
+    document-wide collection.
+  -->
+  <input type="hidden" name="utm_campaign" value="spring-secret-9x1">
+  <input type="hidden" name="lead_source" value="ads-secret-7k2">
+
+  <h2>Join the list</h2>
+  <form id="alpha" action="/alpha" method="post">
+    <input type="hidden" name="csrf" value="csrf-secret-5m3">
+    <label for="alpha-email">Work email</label>
+    <input id="alpha-email" type="email" name="email" autocomplete="email" required>
+    <button type="submit">Join the list</button>
+  </form>
+
+  <h2>Ship an order</h2>
+  <form id="beta" action="/beta" method="post">
+    <label for="beta-country">Country</label>
+    <select id="beta-country" name="country">
+      <option>Country 01</option><option>Country 02</option><option>Country 03</option>
+      <option>Country 04</option><option>Country 05</option><option>Country 06</option>
+      <option>Country 07</option><option>Country 08</option><option>Country 09</option>
+      <option>Country 10</option><option>Country 11</option><option>Country 12</option>
+      <option>Country 13</option><option>Country 14</option><option>Country 15</option>
+      <option>Country 16</option><option>Country 17</option><option>Country 18</option>
+      <option>Country 19</option><option>Country 20</option><option>Country 21</option>
+      <option>Country 22</option><option>Country 23</option><option>Country 24</option>
+      <option>Country 25</option><option>Country 26</option><option>Country 27</option>
+      <option>Country 28</option><option>Country 29</option><option>Country 30</option>
+      <option>Country 31</option><option>Country 32</option><option>Country 33</option>
+      <option>Country 34</option><option>Country 35</option><option>Country 36</option>
+      <option>Country 37</option><option>Country 38</option><option>Country 39</option>
+      <option>Country 40</option><option>Country 41</option><option>Country 42</option>
+      <option>Country 43</option><option>Country 44</option><option>Country 45</option>
+      <option>Country 46</option><option>Country 47</option><option>Country 48</option>
+      <option>Country 49</option><option>Country 50</option><option>Country 51</option>
+      <option>Country 52</option><option>Country 53</option><option>Country 54</option>
+      <option>Country 55</option><option>Country 56</option><option>Country 57</option>
+      <option>Country 58</option><option>Country 59</option><option>Country 60</option>
+    </select>
+    <button type="submit">Ship it</button>
+  </form>
+
+  <footer>
+    <p>&copy; 2026 Edge Cases Ltd. <a href="/privacy">Privacy</a></p>
+  </footer>
+</body>
+</html>

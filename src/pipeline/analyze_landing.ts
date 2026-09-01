@@ -24,7 +24,23 @@ import { buildLinks } from "../analysis/sections/links.js";
 import { buildTracking } from "../analysis/sections/tracking.js";
 import { buildSeo } from "../analysis/sections/seo.js";
 import { buildTechnical } from "../analysis/sections/technical.js";
+import { buildRawEvidence } from "../analysis/sections/raw_evidence.js";
+import { CompletenessLedger } from "../analysis/evidence/completeness.js";
 import { detectObservedIssues } from "../analysis/observed_issues.js";
+
+/**
+ * How much work one request is worth.
+ *
+ * "full" is the audit: the mobile pass, the link check, the whole screenshot.
+ * "light" is the second and third page of a funnel, where the job is to see
+ * what the page IS - the evidence - and a link audit of somebody's checkout is
+ * neither wanted nor cheap. Page-agnostic on purpose: it changes how hard the
+ * crawler works, never what it concludes.
+ */
+export type CaptureProfile = "full" | "light";
+
+/** Strips a light run photographs. Enough to recognise a page, not to audit it. */
+const LIGHT_MAX_STRIPS = 3;
 
 export interface AnalyzeLandingOptions {
   url: string;
@@ -45,19 +61,33 @@ export interface AnalyzeLandingOptions {
   deadlineMs?: number;
   /** Photograph the page as well as reading it. Off unless asked for. */
   screenshot?: boolean;
+  /**
+   * How much of the audit to run. Defaults to "full"; "light" keeps the
+   * evidence and drops the checks a downstream page does not need.
+   */
+  captureProfile?: CaptureProfile;
 }
 
 /** Loads one landing page and turns it into the structured analysis. */
 export async function analyzeLandingPage(options: AnalyzeLandingOptions): Promise<LandingAnalysis> {
   const startedAt = Date.now();
+  // Anything that is not the word "light" is the full audit. An unrecognised
+  // profile must never fail a request: the caller asked for an analysis, and a
+  // typo in an optional switch is not a reason to refuse one.
+  const light = options.captureProfile === "light";
   const capture = await captureLandingPage({
     jobId: options.jobId,
     url: options.url,
     browser: options.browser,
     config: options.config,
-    checkMobileViewport: options.checkMobileViewport,
+    // A second page load for a mobile viewport is the most expensive thing
+    // here, and it answers a question about layout, not about evidence.
+    checkMobileViewport: light ? false : options.checkMobileViewport,
     screenshot: options.screenshot === true,
-    linkCheck: options.linkCheck,
+    ...(light ? { screenshotMaxStrips: LIGHT_MAX_STRIPS } : {}),
+    // Fetching every link on somebody's checkout page is an audit of a page
+    // nobody asked to audit.
+    linkCheck: light ? { ...options.linkCheck, enabled: false } : options.linkCheck,
     isAllowedUrl: options.isAllowedUrl ?? options.linkCheck.isAllowedUrl,
     ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
   });
@@ -70,6 +100,14 @@ export async function analyzeLandingPage(options: AnalyzeLandingOptions): Promis
  * a synthetic capture without launching a browser.
  */
 export function composeAnalysis(capture: CaptureResult, durationMs: number): LandingAnalysis {
+  // Rebuilt from the rows the snapshot carried across the page.evaluate
+  // boundary, then added to by the capture-level collectors, so one list ends
+  // up describing every cap that applied anywhere in this analysis.
+  const ledger = new CompletenessLedger();
+  for (const row of capture.snapshot?.completeness ?? []) {
+    ledger.record(row.field, row.captured, row.total, row.cap);
+  }
+
   const headings = buildHeadings(capture);
   const videos = buildVideos(capture);
   const ctas = buildCtas(capture);
@@ -90,6 +128,9 @@ export function composeAnalysis(capture: CaptureResult, durationMs: number): Lan
   const offer = buildOffer(capture, ctas, pricing, guarantees);
 
   const withoutIssues: Omit<LandingAnalysis, "observed_issues"> = {
+    // Built first among the section calls that follow so that every ledger row
+    // it adds is already in place when `completeness` is read.
+    raw_evidence: buildRawEvidence(capture, ledger),
     schema_version: ANALYSIS_SCHEMA_VERSION,
     screenshot: capture.screenshot,
     analyzed_at: new Date().toISOString(),

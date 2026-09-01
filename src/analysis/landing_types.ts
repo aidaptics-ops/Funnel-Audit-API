@@ -1,4 +1,6 @@
 import type { PageScreenshot } from "../pipeline/screenshot.js";
+import type { RawHtml } from "../pipeline/raw_html.js";
+import type { CompletenessEntry } from "./evidence/completeness.js";
 import type {
   BenefitStackItem,
   FaqItem,
@@ -611,6 +613,246 @@ export interface AnalysisSummary {
   issues: { total: number; by_severity: Record<IssueSeverity, number> };
 }
 
+/* ----------------------------- raw evidence ------------------------------ */
+
+/**
+ * A collection that was cut short, shipped with the reason it is short.
+ *
+ * Every section above this one is a judgement. This envelope, and the section
+ * that uses it, exist so that no judgement has to be made here: a reader is
+ * handed the items, how many there were, and whether the cap ate any of them,
+ * and decides for itself. An "absence" claim over a `truncated: true` field is
+ * unfounded, and this is what makes that checkable.
+ */
+export interface Capped<T> {
+  items: T[];
+  total: number;
+  truncated: boolean;
+  cap: number;
+}
+
+export interface MetaEntry {
+  name: string | null;
+  property: string | null;
+  http_equiv: string | null;
+  content: string | null;
+}
+
+export interface LinkRelEntry {
+  rel: string | null;
+  href: string | null;
+  type: string | null;
+}
+
+export interface RawHeadingEntry {
+  level: number;
+  text: string;
+  visible: boolean;
+  position: FoldPosition;
+  y: number;
+}
+
+export interface RawTextEntry {
+  text: string;
+  visible: boolean;
+  position: FoldPosition;
+  y: number;
+}
+
+export interface RawLinkEntry {
+  text: string;
+  href: string | null;
+  /** The href's host as the browser resolved it. Never interpreted. */
+  host: string | null;
+  visible: boolean;
+  position: FoldPosition;
+  in_nav: boolean;
+  in_footer: boolean;
+  x: number | null;
+  y: number;
+}
+
+export interface RawButtonEntry {
+  text: string;
+  tag: string;
+  type: string | null;
+  href: string | null;
+  visible: boolean;
+  position: FoldPosition;
+  x: number | null;
+  y: number;
+  selector: string | null;
+}
+
+export interface RawImageEntry {
+  src: string | null;
+  alt: string | null;
+  title: string | null;
+  srcset: string | null;
+  sizes: string | null;
+  loading: string | null;
+  id: string | null;
+  class_name: string | null;
+  width: number;
+  height: number;
+  natural_width: number | null;
+  natural_height: number | null;
+  visible: boolean;
+  position: FoldPosition;
+  /** Under 20px in either axis. A tracking pixel is still reported. */
+  meets_size_threshold: boolean;
+}
+
+export interface RawScriptEntry {
+  src: string | null;
+  host: string | null;
+  /** Inline body, whitespace-collapsed and capped. Null for a src script. */
+  inline_snippet: string | null;
+}
+
+/** An iframe, embed or object, with the attributes that identify the third party. */
+export interface RawEmbedEntry {
+  tag: string;
+  src: string | null;
+  /** The src's host, verbatim. Which service it belongs to is not decided here. */
+  host: string | null;
+  title: string | null;
+  name: string | null;
+  id: string | null;
+  class_name: string | null;
+  allow: string | null;
+  sandbox: string | null;
+  loading: string | null;
+  visible: boolean;
+  position: FoldPosition;
+  width: number;
+  height: number;
+  y: number;
+  /** Same-origin, so its contents could be read. Cross-origin ones cannot be. */
+  inspectable: boolean;
+}
+
+export interface RawFormFieldEntry {
+  tag: string;
+  type: string;
+  name: string | null;
+  id: string | null;
+  placeholder: string | null;
+  label: string | null;
+  required: boolean;
+  autocomplete: string | null;
+  options: string[];
+  checked: boolean | null;
+  /** Whether the field arrived prefilled. The value itself is never read. */
+  value_present: boolean;
+  selector: string | null;
+}
+
+/** A hidden input's declared existence. Its value is deliberately not carried. */
+export interface RawHiddenInputEntry {
+  name: string | null;
+  id: string | null;
+  value_present: boolean;
+}
+
+/**
+ * A hidden input as the document holds it, naming the form it sits in. The
+ * per-form copies below are a convenience view; this is the collection the
+ * `hidden_inputs` completeness row actually describes, and it keeps the inputs
+ * that belong to no form and the ones on a page that declares several.
+ */
+export interface RawDocumentHiddenInputEntry extends RawHiddenInputEntry {
+  form_selector: string | null;
+}
+
+/**
+ * One form exactly as the page declared it - including the search box, the
+ * login form and the newsletter footer that the `forms` section above filters
+ * out. What counts as a "real" form is a judgement, and this is the layer that
+ * refuses to make one.
+ */
+export interface RawFormEntry {
+  index: number;
+  selector: string | null;
+  name: string | null;
+  id: string | null;
+  action: string | null;
+  /** The action's host, verbatim, when the action is an absolute URL. */
+  action_host: string | null;
+  method: string;
+  visible: boolean;
+  position: FoldPosition;
+  y: number;
+  in_modal: boolean;
+  heading_near: string | null;
+  submit_text: string | null;
+  field_count: number;
+  fields: RawFormFieldEntry[];
+  hidden_inputs: RawHiddenInputEntry[];
+  /**
+   * Foreign documents nested in this form, with the raw host. A form whose only
+   * content is an embed has no fields at all, and this is the whole of the
+   * evidence for what it does.
+   */
+  embedded_iframes: { tag: string; src: string | null; host: string | null; title: string | null }[];
+}
+
+/**
+ * Everything observed, before anything decided what it meant.
+ *
+ * Playwright collects what exists; a model determines what it means. Every
+ * other section of this response is the crawler taking a view — this one is
+ * deliberately viewless, so a reader can conclude "this is a Calendly booking
+ * page" from a host and a window global that nothing here ever labelled.
+ */
+export interface RawEvidenceSection {
+  html: RawHtml;
+  title: string;
+  url: {
+    requested: string;
+    final: string;
+    redirect_chain: RedirectHop[];
+    http_status: number | null;
+    content_type: string | null;
+  };
+  /** Every <meta> the page declared, not the whitelist the analysis reads. */
+  meta: Capped<MetaEntry>;
+  charset: string | null;
+  links_rel: Capped<LinkRelEntry>;
+  visible_text: { text: string; characters: number; truncated: boolean };
+  headings: RawHeadingEntry[];
+  paragraphs: Capped<RawTextEntry>;
+  links: Capped<RawLinkEntry>;
+  buttons: Capped<RawButtonEntry>;
+  images: Capped<RawImageEntry>;
+  scripts: Capped<RawScriptEntry>;
+  iframes_embeds: Capped<RawEmbedEntry>;
+  /** Unfiltered: search and login forms included, hidden inputs attached. */
+  forms: RawFormEntry[];
+  /**
+   * Every hidden input in the document, whichever form it belongs to and
+   * whether it belongs to one at all. The copies attached to each form above
+   * cannot carry an input that sits outside every form, and the ledger counts
+   * this collection - so without it a page whose UTM state lives in the body
+   * would report no hidden inputs over a row marked complete.
+   */
+  hidden_inputs: Capped<RawDocumentHiddenInputEntry>;
+  json_ld: unknown[];
+  /** Vendor names found on window. A name, never a conclusion. */
+  window_globals_present: string[];
+  console_errors: { text: string; source: string | null }[];
+  page_errors: string[];
+  failed_requests: { url: string; status: number | null; reason: string; occurrences: number }[];
+  request_count: number;
+  viewport: { width: number; height: number; scroll_width: number; scroll_height: number };
+  body_overflow_x: boolean;
+  /**
+   * What every collector kept against what the page held. A field marked
+   * incomplete here cannot support an "there is no X on this page" claim.
+   */
+  completeness: CompletenessEntry[];
+}
+
 /* ------------------------------- analysis -------------------------------- */
 
 export interface LandingAnalysis {
@@ -648,6 +890,13 @@ export interface LandingAnalysis {
   technical: TechnicalSection;
   summary: AnalysisSummary;
   observed_issues: ObservedIssue[];
+  /**
+   * The unjudged reading of the page. Everything above is this service's
+   * interpretation; this is the evidence it was drawn from, complete enough
+   * that a reader can reach a different conclusion — and honest about where it
+   * is not complete.
+   */
+  raw_evidence: RawEvidenceSection;
 }
 
 export interface AnalyzeResponse {

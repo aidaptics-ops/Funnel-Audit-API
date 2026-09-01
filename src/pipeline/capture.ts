@@ -12,7 +12,8 @@ import {
   isSameDocument,
 } from "./page_stability.js";
 import { checkLinks, type LinkCheckOptions } from "./link_checker.js";
-import { capturePageStrips, type PageScreenshot } from "./screenshot.js";
+import { captureRenderedHtml, type RawHtml } from "./raw_html.js";
+import { capturePageStrips, DEFAULT_MAX_STRIPS, type PageScreenshot } from "./screenshot.js";
 
 export interface CaptureOptions {
   jobId: string;
@@ -37,6 +38,8 @@ export interface CaptureOptions {
    * a caller that intends to show them to a vision model wants to carry them.
    */
   screenshot?: boolean;
+  /** Ceiling on the strips photographed. Defaults to the screenshot module's own. */
+  screenshotMaxStrips?: number;
 }
 
 export interface MobileObservation {
@@ -55,6 +58,8 @@ export interface CaptureResult {
   content_type: string | null;
   redirect_chain: RedirectHop[];
   snapshot: DomSnapshot;
+  /** The serialised DOM the snapshot was read from. Always present, even on failure. */
+  raw_html: RawHtml;
   record: PageRecord;
   console_errors: ConsoleErrorRecord[];
   page_errors: string[];
@@ -62,6 +67,8 @@ export interface CaptureResult {
   /** Everything observed, including the entries dropped by the monitor's cap. */
   failed_request_total: number;
   console_error_total: number;
+  /** Every uncaught page error seen, including the ones the cap dropped. */
+  page_error_total: number;
   request_count: number;
   stability_events: string[];
   timing: { navigation_ms: number; render_wait_ms: number; total_ms: number };
@@ -167,6 +174,11 @@ async function runCapture(
   // could have moved the document since the load completed.
   assertNavigationAllowed(page.url(), options.isAllowedUrl);
 
+  // Taken before extraction so the markup and the collectors describe the same
+  // settled document, and after the guard so no disallowed page's source can
+  // reach the payload.
+  const rawHtml = await captureRenderedHtml(page, budget(deadlineAt, 8_000));
+
   const extracted = await withDeadline(
     extractPageEvidence(page),
     budget(deadlineAt, options.config.timeout_ms * 2),
@@ -195,12 +207,14 @@ async function runCapture(
     content_type: responseDescribesPage ? response?.headers()["content-type"] ?? null : null,
     redirect_chain: redirects,
     snapshot: extracted.snapshot,
+    raw_html: rawHtml,
     record: extracted.record,
     console_errors: monitor.consoleErrors,
     page_errors: monitor.pageErrors,
     failed_requests: monitor.failedRequests,
     failed_request_total: monitor.failedRequestTotal,
     console_error_total: monitor.consoleErrorTotal,
+    page_error_total: monitor.pageErrorTotal,
     request_count: monitor.requestCount,
     stability_events: stabilityEvents,
     timing: { navigation_ms: navigationMs, render_wait_ms: renderWaitMs, total_ms: 0 },
@@ -214,7 +228,11 @@ async function runCapture(
   // is still open and settled at this point, which is the state everything
   // else was measured in.
   if (options.screenshot) {
-    result.screenshot = await capturePageStrips(page, budget(deadlineAt, 20_000));
+    result.screenshot = await capturePageStrips(
+      page,
+      budget(deadlineAt, 20_000),
+      options.screenshotMaxStrips ?? DEFAULT_MAX_STRIPS,
+    );
   }
 
   if (options.checkMobileViewport) {

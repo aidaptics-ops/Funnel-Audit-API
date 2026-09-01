@@ -123,6 +123,55 @@ describe("POST /analyze", () => {
     assert.equal("predicted_issues" in json.analysis, false);
   });
 
+  it("ships the raw evidence alongside the judged sections", async () => {
+    const { json } = await post("/analyze", { url: fixture.url("/optin.html") });
+    const evidence = json.analysis.raw_evidence;
+    assert.ok(evidence, "raw_evidence is missing from the response");
+    assert.equal(evidence.html.captured, true);
+    assert.equal(typeof evidence.html.sha256, "string");
+    assert.ok(Array.isArray(evidence.completeness) && evidence.completeness.length > 0);
+    // The judged `forms` section filters; this one must not.
+    assert.ok(evidence.forms.length >= json.analysis.forms.length);
+  });
+
+  it("reads capture_profile and never fails on an unrecognised one", async () => {
+    const seen: string[] = [];
+    const spy = createServer(config, {
+      analyze: async (_url, _jobId, _budget, request) => {
+        seen.push(request.captureProfile);
+        return { schema_version: "test" } as any;
+      },
+    });
+    await new Promise<void>((resolve) => spy.listen(0, "127.0.0.1", () => resolve()));
+    const address = spy.address();
+    const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+
+    try {
+      for (const body of [
+        { url: "https://example.com" },
+        { url: "https://example.com", capture_profile: "light" },
+        { url: "https://example.com", capture_profile: "full" },
+        // A typo, a wrong type and a null must all degrade to the full audit
+        // rather than costing the caller their analysis.
+        { url: "https://example.com", capture_profile: "lite" },
+        { url: "https://example.com", capture_profile: 7 },
+        { url: "https://example.com", capture_profile: null },
+      ]) {
+        const response = await fetch(`${base}/analyze`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        assert.equal(response.status, 200, `${JSON.stringify(body)} -> ${response.status}`);
+        await response.text();
+      }
+    } finally {
+      await new Promise<void>((resolve) => spy.close(() => resolve()));
+    }
+
+    assert.deepEqual(seen, ["full", "light", "full", "full", "full", "full"]);
+  });
+
   it("handles repeated sequential analyses", async () => {
     for (const path of ["/optin.html", "/minimal.html", "/optin.html"]) {
       const { status, json } = await post("/analyze", { url: fixture.url(path) });

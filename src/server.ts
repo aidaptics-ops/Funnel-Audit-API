@@ -40,6 +40,7 @@ export async function main(): Promise<void> {
           config: browserConfig,
           checkMobileViewport: config.checkMobileViewport,
           screenshot: request.screenshot,
+          captureProfile: request.captureProfile,
           budgetMs: budget.budgetMs,
           deadlineAt: budget.deadlineAt,
           signal: budget.signal,

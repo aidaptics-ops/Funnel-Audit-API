@@ -46,8 +46,20 @@ check at `/health` — it answers without touching the browser, so it stays gree
 ### `POST /analyze`
 
 ```json
-{ "url": "https://example.com/funnel" }
+{ "url": "https://example.com/funnel", "screenshot": false, "capture_profile": "full" }
 ```
+
+`url` is the only required field.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `screenshot` | `false` | Also return strips of the rendered page, for a vision model |
+| `capture_profile` | `"full"` | `"full"` runs the whole audit; `"light"` keeps the evidence and drops the checks a downstream page does not need |
+
+`capture_profile: "light"` is page-agnostic — it changes how hard the crawler works, never what it
+concludes. It switches off the second mobile-viewport pass, switches off link checking, and caps the
+screenshot at 3 strips. Use it for the second and third page of a funnel, where the question is what the
+page *is* rather than how well it converts. An unrecognised value is treated as `"full"`, never an error.
 
 ```json
 {
@@ -66,7 +78,7 @@ Failures use the same envelope:
 
 | Code | HTTP | Meaning |
 | --- | --- | --- |
-| `invalid_url`, `unsupported_scheme`, `private_host`, `credentials_not_allowed`, `url_too_long`, `invalid_body` | 400 | Rejected before a browser was touched |
+| `invalid_url`, `unsupported_scheme`, `private_host`, `credentials_not_allowed`, `url_too_long`, `invalid_body`, `dns_resolution_failed` | 400 | Rejected before a browser was touched |
 | `too_many_requests` | 429 | All analysis slots were busy for longer than the queue wait |
 | `analysis_timeout` | 408 | The analysis exceeded `ANALYSIS_TIMEOUT_MS` |
 | `navigation_failed` | 502 | The target page could not be loaded |
@@ -80,7 +92,7 @@ Failures use the same envelope:
 
 ## The analysis object
 
-One page, twenty-one sections, all built from a single render:
+One page, twenty-two sections, all built from a single render:
 
 | Section | What it holds |
 | --- | --- |
@@ -106,6 +118,63 @@ One page, twenty-one sections, all built from a single render:
 | `technical` | HTTPS, redirects, console errors, failed requests, broken images, iframes, third-party scripts, mobile observations |
 | `summary` | cross-section counts, primary CTA, CTA consistency, issue totals |
 | `observed_issues` | evidence-backed findings only |
+| `raw_evidence` | everything observed, before anything decided what it meant — see below |
+
+### `raw_evidence`: what was seen, not what it means
+
+Every other section is a judgement, and a judgement throws away the evidence it was made from. That is
+fine while the question is one this service already knows to ask, and useless the moment it is not —
+nothing in here has heard of the page builder that ships next month.
+
+`raw_evidence` is deliberately viewless. It carries the rendered HTML (head verbatim, body as a skeleton
+with script/style bodies, long `data:` URIs and the values of hidden/password/email/tel inputs elided,
+plus a sha256 of the *whole* document), the page title and URL chain, every `<meta>` and `<link rel>`, the
+visible text, headings, paragraphs, links, buttons, images with their attributes, scripts with their hosts
+and inline snippets, every iframe/embed/object with its raw host, the JSON-LD, the vendor globals found on
+`window`, console and page errors, failed requests, and the viewport.
+
+Its `images` are **unfiltered**: the judged sections read a list with everything under 20px square removed,
+because a tracking pixel counted as a visible image arrives as a missing alt and a spacer gif that never
+loads arrives as a broken image. Here every `<img>` is kept, each carrying `meets_size_threshold` so a
+reader can tell which side of that line it fell on.
+
+Its `forms` array is **unfiltered** too: the search box and the login form that the judged `forms` section
+drops are all here, each with its action and action host, method, name/id, every field
+(tag/type/name/id/placeholder/label/required/autocomplete/options), its hidden inputs, its submit text and
+the raw host of any iframe embedded inside it.
+
+A document-wide `hidden_inputs` sits beside `forms`, naming each input's owning form (`null` for one that
+belongs to no form). The per-form copies are a convenience view and cannot carry an input that sits outside
+every form — the ledger counts the document-wide collection, so this is the field its row describes.
+
+No hidden input's **value** is ever reported, in any field: a hidden input routinely carries a CSRF token, a
+session id or a prefilled email address, and only `value_present` is evidence.
+
+Nothing here is labelled. A `calendly.com` iframe is reported as a host and a `window.Calendly` global as a
+name; concluding "this is a booking page" is the reader's job, not the crawler's.
+
+#### Declared incompleteness
+
+Every collection that a cap or a filter could shorten ships as:
+
+```json
+{ "items": [], "total": 412, "truncated": true, "cap": 300 }
+```
+
+and every collector also records a row in `raw_evidence.completeness`:
+
+```json
+{ "field": "meta_all", "captured": 300, "total": 412, "complete": false, "cap": 300 }
+```
+
+This exists because a truncated list and an empty page are indistinguishable once the evidence leaves the
+process — `"links": []` reads as "the page has no links" whether that is true or whether the cap ate them.
+**A reader may only conclude "there is no X on this page" over a field the ledger marks `complete`.** A
+few rows can never read complete by design: `window_globals_present` counts vendor names found against
+every global the page defines, so a name probe can never certify that no third-party service is present.
+Caps inside a record are declared the same way — `forms.fields.options` counts the choices kept across
+every `<select>` against every choice the page offered, because a country list cut at 50 with nothing
+saying so reads as a checkout that does not ship where the reader asked.
 
 ### How uncertainty is expressed
 
@@ -186,6 +255,7 @@ POST /analyze
    ↓  pipeline/capture.ts        one render: navigate, settle, snapshot, link-check
    ↓  extraction/*               DOM snapshot + detectors (forms, CTAs, video, pricing, proof, …)
    ↓  analysis/sections/*        one module per section, pure functions
+   ↓  analysis/sections/raw_evidence  the unjudged reading, with its completeness ledger
    ↓  analysis/observed_issues   deterministic, evidence-backed rules
    ↓  JSON response
 ```
@@ -215,8 +285,9 @@ npm test
 ```
 
 Covers landing-page analysis, VSL detection, CTA detection, form detection without submission, tracking,
-SEO, contextual severity, observed issues, `/analyze`, `/health`, invalid URLs, SSRF rejection, browser
-cleanup, and repeated sequential analyses. Browser-backed tests run against a local fixture server.
+SEO, contextual severity, observed issues, raw-evidence capture and its completeness ledger,
+`capture_profile`, `/analyze`, `/health`, invalid URLs, SSRF rejection, browser cleanup, and repeated
+sequential analyses. Browser-backed tests run against a local fixture server.
 
 ## What was removed
 

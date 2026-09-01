@@ -38,6 +38,10 @@ const REQUIRED_KEYS = [
   "technical",
   "summary",
   "observed_issues",
+  // The unjudged reading: what was observed, before anything decided what it
+  // meant. Always present — a reader that has to check whether the evidence
+  // exists cannot rely on it to contradict the sections above.
+  "raw_evidence",
   // Always present, null unless the request asked for it. A key that only
   // sometimes exists is a worse contract than one that is explicitly empty.
   "screenshot",
@@ -56,27 +60,34 @@ const browserConfig: BrowserConfig = {
 let fixture: FixtureServer;
 let browsers: BrowserManager;
 let analysis: LandingAnalysis;
+/** The same page with the images asked for — the largest response this API sends. */
+let photographed: LandingAnalysis;
 
 before(async () => {
   fixture = await startFixtureServer();
   browsers = new BrowserManager(browserConfig);
   const browser = await browsers.get();
-  analysis = await analyzeLandingPage({
-    url: fixture.url("/vsl.html"),
-    jobId: randomUUID(),
-    browser,
-    config: browserConfig,
-    checkMobileViewport: false,
-    linkCheck: {
-      enabled: true,
-      maxLinks: 10,
-      timeoutMs: 4000,
-      concurrency: 4,
-      sameOriginOnly: true,
+  const run = (screenshot: boolean): Promise<LandingAnalysis> =>
+    analyzeLandingPage({
+      url: fixture.url("/vsl.html"),
+      jobId: randomUUID(),
+      browser,
+      config: browserConfig,
+      checkMobileViewport: false,
+      screenshot,
+      linkCheck: {
+        enabled: true,
+        maxLinks: 10,
+        timeoutMs: 4000,
+        concurrency: 4,
+        sameOriginOnly: true,
+        isAllowedUrl: (url) => isAllowedUrl(url, { allowPrivateHosts: true }),
+      },
       isAllowedUrl: (url) => isAllowedUrl(url, { allowPrivateHosts: true }),
-    },
-    isAllowedUrl: (url) => isAllowedUrl(url, { allowPrivateHosts: true }),
-  });
+    });
+
+  analysis = await run(false);
+  photographed = await run(true);
 });
 
 after(async () => {
@@ -122,7 +133,9 @@ describe("response contract", () => {
 
   it("states plainly that no form was interacted with", () => {
     for (const form of analysis.forms) {
-      assert.equal(form.interacted, false, `form ${form.form_id ?? form.index} claims interaction`);
+      // FormEntry is keyed by `index`; there has never been a `form_id`, so the
+      // message this used to build was always "form undefined".
+      assert.equal(form.interacted, false, `form ${form.index} claims interaction`);
     }
   });
 
@@ -153,9 +166,36 @@ describe("response contract", () => {
     }
   });
 
-  it("keeps the payload a sane size", () => {
+  it("keeps the payload a sane size without the images", () => {
+    assert.equal(analysis.screenshot, null, "this case must be the screenshot-less one");
     const bytes = Buffer.byteLength(JSON.stringify(analysis));
     assert.ok(bytes < 2_000_000, `response is ${bytes} bytes, which is too large for one landing page`);
+  });
+
+  it("keeps the payload a sane size with the images and the markup", () => {
+    // The strips and the rendered HTML are the two things that can actually
+    // grow the response, and they only both appear when a caller asks for the
+    // pictures. Budgeting them together is the only assertion that covers the
+    // largest response this API can send.
+    assert.equal(photographed.screenshot?.captured, true, "the screenshot case captured nothing");
+    assert.ok(
+      (photographed.screenshot?.strips.length ?? 0) > 0,
+      "the screenshot case produced no strips",
+    );
+    const bytes = Buffer.byteLength(JSON.stringify(photographed));
+    assert.ok(bytes < 6_000_000, `screenshot response is ${bytes} bytes, which is too large`);
+  });
+
+  it("carries the raw evidence the sections were read from", () => {
+    const evidence = photographed.raw_evidence;
+    assert.equal(evidence.html.captured, true, "the rendered markup was not captured");
+    assert.ok(evidence.completeness.length > 0, "no completeness rows were declared");
+    assert.equal(evidence.url.final, photographed.funnel.final_url);
+    // Nothing in here may label a vendor: the whole point is that the reader
+    // draws that conclusion from the host.
+    for (const embed of evidence.iframes_embeds.items) {
+      assert.equal(typeof embed.src === "string" || embed.src === null, true);
+    }
   });
 });
 

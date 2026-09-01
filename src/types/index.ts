@@ -3,6 +3,8 @@
  * The shape returned by the API lives in `analysis/landing_types.ts`.
  */
 
+import type { CapturedCollection, CompletenessEntry } from "../analysis/evidence/completeness.js";
+
 export type DeviceProfileName = "desktop" | "mobile";
 
 export type PageType =
@@ -103,6 +105,12 @@ export interface FormFieldRecord {
   name: string | null;
   id: string | null;
   label: string | null;
+  /**
+   * The element itself - "input", "select", "textarea", or the tag of a
+   * contenteditable node. `type` cannot express it: a contenteditable div and a
+   * plain text input both report "text".
+   */
+  tag?: string;
   type: string;
   placeholder: string | null;
   required: boolean;
@@ -178,6 +186,21 @@ export interface ImageRecord {
   position: FoldPosition;
   width: number;
   height: number;
+  title?: string | null;
+  srcset?: string | null;
+  sizes?: string | null;
+  loading?: string | null;
+  id?: string | null;
+  class_name?: string | null;
+  /** 0 while the image is still loading, and for one that failed to load. */
+  natural_width?: number;
+  natural_height?: number;
+  /**
+   * Whether the image clears the 20px threshold the snapshot used to delete
+   * below. Tracking pixels and spacer gifs are still reported: a dropped image
+   * reads as an image the page does not have.
+   */
+  meets_size_threshold?: boolean;
 }
 
 export interface CtaRecord {
@@ -344,6 +367,61 @@ export interface ScriptRecord {
   inline_snippet: string | null;
 }
 
+/**
+ * One <meta> exactly as the page declared it. MetaRecord above is the whitelist
+ * the analysis reads; this is the raw set, for a reader that recognises a tag
+ * this service was never taught to name.
+ */
+export interface MetaTagRecord {
+  name: string | null;
+  property: string | null;
+  http_equiv: string | null;
+  content: string | null;
+}
+
+export interface LinkRelRecord {
+  rel: string | null;
+  href: string | null;
+  type: string | null;
+}
+
+/**
+ * A hidden input, minus its value. Hidden inputs routinely carry CSRF tokens,
+ * session ids and prefilled contact details, so only the fact that a value
+ * exists is reported - the value itself is a liability, not evidence.
+ */
+export interface HiddenInputRecord {
+  type: "hidden";
+  name: string | null;
+  id: string | null;
+  value_present: boolean;
+  /** The form it belongs to, so hidden state can be grouped without re-querying. */
+  form_selector: string | null;
+}
+
+/**
+ * Anything that embeds a foreign document: iframe, embed or object. IframeRecord
+ * covers iframes alone and stays as it is; this is the wider net, and it carries
+ * the attributes that identify the third party without labelling it.
+ */
+export interface EmbedRecord {
+  tag: string;
+  src: string | null;
+  title: string | null;
+  name: string | null;
+  id: string | null;
+  class_name: string | null;
+  allow: string | null;
+  sandbox: string | null;
+  loading: string | null;
+  visible: boolean;
+  position: FoldPosition;
+  width: number;
+  height: number;
+  y: number;
+  inspectable: boolean;
+}
+
 export interface PageTechnicalSnapshot {
   scripts: ScriptRecord[];
   tracking_globals: string[];
@@ -357,6 +435,9 @@ export interface PageTechnicalSnapshot {
 
 export interface RawFormSnapshot {
   selector: string | null;
+  /** The form's own name/id attributes, which the selector may not preserve. */
+  name?: string | null;
+  id?: string | null;
   action: string | null;
   method: string;
   visible: boolean;
@@ -365,6 +446,12 @@ export interface RawFormSnapshot {
   submit_text: string | null;
   heading_near: string | null;
   in_modal?: boolean;
+  /**
+   * Foreign documents nested inside this form. A funnel whose "form" is a
+   * Typeform or a Calendly widget has no fields at all in the markup; the src
+   * is the only evidence there is, and it is reported without being named.
+   */
+  embedded_iframes?: { tag: string; src: string | null; title: string | null }[];
 }
 
 export interface DomSnapshot {
@@ -391,6 +478,30 @@ export interface DomSnapshot {
   broken_images?: { src: string | null; alt: string | null; y: number }[];
   lang?: string | null;
   has_viewport_meta?: boolean;
+  /**
+   * Every <img> the page declared, tracking pixels and spacer gifs included,
+   * alongside - not instead of - `images`. `images` is the judged list: the
+   * collector drops anything under 20px square, because a 1x1 pixel arriving
+   * as a visible image reads as a missing alt or a broken image. This is the
+   * same collection with that filter lifted, for a reader asking a question
+   * the filter was never built to answer.
+   */
+  images_all?: CapturedCollection<ImageRecord>;
+  /** Every <meta> on the page, alongside - not instead of - the `meta` whitelist. */
+  meta_all?: CapturedCollection<MetaTagRecord>;
+  charset?: string | null;
+  links_rel?: CapturedCollection<LinkRelRecord>;
+  hidden_inputs?: CapturedCollection<HiddenInputRecord>;
+  /** iframe, embed and object together. `iframes` above is unchanged. */
+  embeds?: CapturedCollection<EmbedRecord>;
+  /**
+   * Vendor globals found on window. A wider probe than `tracking_globals`:
+   * window.Calendly is what tells a reader the page books calls, and the
+   * crawler reports the name without deciding what it means.
+   */
+  window_globals_present?: string[];
+  /** What each collector kept against what the page held. See CompletenessLedger. */
+  completeness?: CompletenessEntry[];
 }
 
 /** Everything the detectors extract from one rendered page. */
